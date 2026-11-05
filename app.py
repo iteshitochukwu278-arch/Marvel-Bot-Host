@@ -327,13 +327,12 @@ def _contact_row():
 def get_main_keyboard(user_id):
     rows = [
         *_updates_row(),
-        [InlineKeyboardButton(text="📤 Upload File", callback_data="upload_file"),
-         InlineKeyboardButton(text="📁 My Files", callback_data="check_files")],
-        [InlineKeyboardButton(text="🔍 Search Files", callback_data="search_files"),
-         InlineKeyboardButton(text="⚡ Bot Speed", callback_data="bot_speed")],
+        [InlineKeyboardButton(text="➕ Add Bot", callback_data="fleet_add"),
+         InlineKeyboardButton(text="🤖 My Bots", callback_data="fleet_list")],
         [InlineKeyboardButton(text="💾 My Backup", callback_data="my_backup"),
          InlineKeyboardButton(text="🗄️ My Database", callback_data="my_database")],
-        [InlineKeyboardButton(text="🖥️ Terminal", callback_data="terminal_help")],
+        [InlineKeyboardButton(text="🖥️ Terminal", callback_data="terminal_help"),
+         InlineKeyboardButton(text="⚡ Bot Speed", callback_data="bot_speed")],
     ]
     if user_id in admin_ids:
         rows.append([InlineKeyboardButton(text="📊 My Stats", callback_data="statistics"),
@@ -352,33 +351,50 @@ def get_admin_panel_keyboard():
     ])
     return keyboard
 
+COMMANDS_TEXT = """<b>📜 ALL COMMANDS</b>
+/start - Main menu
+/addbot (or /newbot) - Add a bot (send its token first)
+/mybots - Your bots: files, start/stop, logs, backup
+/botenv BOT_ID KEY value - Set a secret
+/botenvdel BOT_ID KEY - Remove a secret
+/botversions BOT_ID file - File versions
+/botrestore BOT_ID file N - Restore a version
+/term COMMAND - Terminal (pip, ls, python...)
+/backup - Download your backup
+/mydb - Your database info
+/search NAME - Search files
+/stats - Your stats
+/cancel - Cancel what you are doing
+/help - Help"""
+
+ADMIN_COMMANDS_TEXT = """
+
+<b>👑 ADMIN COMMANDS</b>
+/fleetadmin - List all bots
+/fleetadmin stop|disable|enable BOT_ID
+/fleetadmin suspend|activate USER_ID
+/fleetadmin limit USER_ID COUNT
+/fleetadmin plan USER_ID COUNT DAYS
+/dbstats - Customers per database server
+/addadmin /removeadmin - Manage admins
+/addpremium - Add premium
+/ban /unban - Ban or unban a user
+/broadcast - Message all users"""
+
 def build_welcome_text(user_id: int, full_name: str) -> str:
     updates_line = f"\n📢 <b>Updates:</b> {_updates_url()}\n" if _updates_url() else "\n"
-    return f"""╔═══════════════════════╗
-    🚀 <b>HOSTING BOT</b> 🚀
-    ⚡ <i>Script Runner Bot</i>
-╚═══════════════════════╝
+    return f"""🚀 <b>HOSTING BOT</b> — by Marvel
 
 👋 <b>Welcome, {full_name}!</b>
-
 🆔 <b>Your ID:</b> <code>{user_id}</code>
-📦 <b>Upload Limit:</b> Unlimited ♾️
 
-━━━━━━━━━━━━━━━━━━━━
-<b>🔥 AVAILABLE FEATURES</b>
+<b>🔥 HOW IT WORKS</b>
+1️⃣ Tap ➕ <b>Add Bot</b> (or /addbot) and send your bot token from @BotFather
+2️⃣ Tap 🤖 <b>My Bots</b> (or /mybots) → pick the bot → 📤 upload its files
+3️⃣ Tap ▶️ <b>Start</b>. Use 📋 Logs, 💾 Backup, ⚙️ Environment anytime
 
-📤 <b>Upload Files</b> — Python, JS, ZIP
-📁 <b>Manage Files</b> — View, delete, organize
-🔍 <b>Search Files</b> — Find by name/type
-▶️ <b>Run Scripts</b> — Execute Python/Node.js
-🛑 <b>Stop Scripts</b> — Force stop running
-📊 <b>View Stats</b> — Usage & storage
-⚡ <b>Speed Test</b> — Bot response time
-💾 <b>File Info</b> — Size, type, date
-ℹ️ <b>Help &amp; Support</b> — Get assistance
-
-━━━━━━━━━━━━━━━━━━━━{updates_line}
-🔒 <b>Version:</b> 2.0"""
+{COMMANDS_TEXT}{ADMIN_COMMANDS_TEXT if user_id in admin_ids else ""}
+{updates_line}"""
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -430,15 +446,19 @@ async def callback_back_to_main(callback: types.CallbackQuery):
 
 👤 <b>User:</b> {callback.from_user.full_name}
 🆔 <b>ID:</b> <code>{user_id}</code>
-📦 <b>Files:</b> {len(user_files.get(user_id, []))} (Unlimited ♾️)
+🤖 <b>Bots:</b> {len(fleet.list_bots(user_id))}
 
-Use buttons below to navigate 👇
+➕ Add Bot → send token first, then 🤖 My Bots → upload files → ▶️ Start
+
+{COMMANDS_TEXT}
 """
     await callback.message.edit_text(welcome_text, reply_markup=get_main_keyboard(user_id), parse_mode="HTML")
     await callback.answer()
 
 @dp.callback_query(F.data == "upload_file")
 async def callback_upload_file(callback: types.CallbackQuery):
+    await menu_upload_callback(callback)
+    return
     user_id = callback.from_user.id
     
     if bot_locked and user_id not in admin_ids:
@@ -492,21 +512,21 @@ async def callback_check_files(callback: types.CallbackQuery):
     if not files:
         text = """
 ╔═══════════════════════╗
-    📁 <b>MY FILES</b> 📁
+    🗂 <b>OLD FILES</b> 🗂
 ╚═══════════════════════╝
 
-📭 <b>No files found!</b>
+📭 <b>No old files.</b>
 
-Upload your first file to get started! 🚀
+Tap ➕ Add Bot and send your bot token to get started! 🚀
 """
         back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📤 Upload File", callback_data="upload_file")],
+            [InlineKeyboardButton(text="➕ Add Bot", callback_data="fleet_add")],
             [InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")]
         ])
     else:
         text = f"""
 ╔═══════════════════════╗
-    📁 <b>MY FILES ({len(files)})</b> 📁
+    🗂 <b>OLD FILES ({len(files)})</b> 🗂
 ╚═══════════════════════╝
 
 """
@@ -599,7 +619,7 @@ To search, use:
 """
     
     back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📁 View All Files", callback_data="check_files")],
+        [InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files")],
         [InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")]
     ])
     
@@ -702,29 +722,24 @@ async def callback_help_info(callback: types.CallbackQuery):
 
 <b>🎯 HOW TO USE:</b>
 
-1️⃣ <b>Upload Files:</b>
-   • Click 'Upload File'
-   • Send your .py, .js, or .zip file
-   • File will be saved automatically
+1️⃣ <b>Add a Bot:</b>
+   • Tap ➕ Add Bot (or /addbot)
+   • Send your bot token from @BotFather
 
-2️⃣ <b>Run Scripts:</b>
-   • Go to 'My Files'
-   • Click 'Run' on any file
-   • Monitor script execution
+2️⃣ <b>Upload Files:</b>
+   • Tap 🤖 My Bots → pick your bot
+   • Tap 📤 Upload/replace file
 
-3️⃣ <b>Manage Files:</b>
-   • View all files in 'My Files'
-   • Add to favorites with ⭐
-   • Delete unwanted files
-
-4️⃣ <b>Search:</b>
-   • Use /search [filename]
-   • Quick file lookup
+3️⃣ <b>Run:</b>
+   • Tap ▶️ Start, then 📋 Logs to watch it
+   • 💾 Backup and ⚙️ Environment are there too
 
 ━━━━━━━━━━━━━━━━━━━━
 <b>💡 COMMANDS:</b>
 
 /start - Start the bot
+/addbot - Add a bot (token first)
+/mybots - Manage your bots
 /help - Show this help
 /search - Search files
 /stats - Your statistics
@@ -750,8 +765,8 @@ async def callback_all_features(callback: types.CallbackQuery):
 
 <b>✨ FREE USER FEATURES (12+):</b>
 
-1. 📤 Upload Files (Python, JS, ZIP)
-2. 📁 View & Manage Files
+1. ➕ Add Bot (token first)
+2. 🤖 My Bots: files, start/stop, logs
 3. ⭐ Add to Favorites
 4. 🔍 Search Files by Name
 5. ▶️ Run Python Scripts
@@ -936,7 +951,7 @@ async def callback_file_info(callback: types.CallbackQuery):
                               callback_data=(f"stop_script:{user_id}_{file_name}" if _is_running(user_id, file_name)
                                              else f"run_script:{file_name}")),
          InlineKeyboardButton(text="🗑️ Delete", callback_data=f"delete_file:{file_name}")],
-        [InlineKeyboardButton(text="📁 My Files", callback_data="check_files"),
+        [InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files"),
          InlineKeyboardButton(text="🏠 Home", callback_data="back_to_main")]
     ])
     
@@ -981,7 +996,7 @@ def _stage_keyboard(user_id):
         for n in runnable:
             rows.append([InlineKeyboardButton(text=f"🚀 Deploy {n[:20]}", callback_data=f"deploy:{n}")])
         rows.append([InlineKeyboardButton(text="🚀 Deploy all", callback_data="deploy_all")])
-    rows.append([InlineKeyboardButton(text="📁 My Files", callback_data="check_files"),
+    rows.append([InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files"),
                  InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1049,7 +1064,11 @@ async def _send_fleet_list(message, uid):
     bots = fleet.list_bots(uid)
     rows = [[InlineKeyboardButton(text=f"🤖 {b['name']} (@{b['username']}) — {b['status']}", callback_data=f"fleet_manage:{b['id']}")] for b in bots]
     rows.append([InlineKeyboardButton(text="➕ Add bot", callback_data="fleet_add")])
-    text = "<b>My hosted bots</b>\n" + ("\n".join(f"• {html.escape(b['name'])} (@{html.escape(b['username'])}) — {b['status']}" for b in bots) if bots else "No bots hosted yet.")
+    text = "<b>My hosted bots</b>\n" + ("\n".join(f"• {html.escape(b['name'])} (@{html.escape(b['username'])}) — {b['status']}" for b in bots) if bots else "No bots yet. Tap ➕ Add bot and send your bot token first.")
+    legacy = len(user_files.get(uid, []))
+    if legacy:
+        text += f"\n\n🗂 You also have <b>{legacy}</b> old-style file(s). Tap below to run/manage them. To move one to the new system: ➕ Add bot, then upload that file into the bot."
+        rows.append([InlineKeyboardButton(text=f"🗂 Old files ({legacy})", callback_data="check_files")])
     await message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
 
 @dp.callback_query(F.data == "fleet_add")
@@ -1151,6 +1170,40 @@ async def cmd_botrestore(message: types.Message):
     try: fleet.restore_file_version(message.from_user.id,args[1],args[2],int(args[3])); await message.answer("File version restored. Running bot restarted if needed.")
     except (FleetError,ValueError) as e: await message.answer(html.escape(str(e)))
 
+@dp.message(Command("newbot"))
+async def cmd_newbot(message: types.Message):
+    await cmd_addbot(message)
+
+@dp.message(Command("cancel"))
+async def cmd_cancel(message: types.Message):
+    uid = message.from_user.id
+    pending_fleet_token.pop(uid, None); pending_fleet_upload.pop(uid, None); pending_names.pop(uid, None)
+    await message.answer("Cancelled. Use /start for the menu.")
+
+async def _pick_bot(callback, action, verb):
+    uid = callback.from_user.id
+    bots = fleet.list_bots(uid)
+    if not bots:
+        pending_fleet_token[uid] = True
+        await callback.message.answer("You have no bots yet. Send your Telegram bot token from @BotFather first. I will verify it, then you can upload files.")
+        await callback.answer(); return
+    if len(bots) == 1:
+        callback.data = f"{action}:{bots[0]['id']}"
+        if action == "fleet_upload": await fleet_upload_callback(callback)
+        else: await fleet_files_callback(callback)
+        return
+    rows = [[InlineKeyboardButton(text=f"🤖 {b['name']} (@{b['username']})", callback_data=f"{action}:{b['id']}")] for b in bots]
+    await callback.message.answer(f"Which bot do you want to {verb}?", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    await callback.answer()
+
+@dp.callback_query(F.data == "menu_upload")
+async def menu_upload_callback(callback: types.CallbackQuery):
+    await _pick_bot(callback, "fleet_upload", "upload a file to")
+
+@dp.callback_query(F.data == "menu_files")
+async def menu_files_callback(callback: types.CallbackQuery):
+    await _pick_bot(callback, "fleet_files", "see files of")
+
 @dp.callback_query(F.data == "fleet_list")
 async def fleet_list_callback(callback: types.CallbackQuery):
     await _send_fleet_list(callback.message, callback.from_user.id); await callback.answer()
@@ -1228,14 +1281,14 @@ async def callback_deploy(callback: types.CallbackQuery):
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🛑 Stop Script", callback_data=f"stop_script:{key}")],
                 [InlineKeyboardButton(text="📋 View Output", callback_data=f"view_log:{file_name}")],
-                [InlineKeyboardButton(text="📁 My Files", callback_data="check_files")]])
+                [InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files")]])
             await note.edit_text(f"✅ <code>{html.escape(file_name)}</code> is running (PID {bot_scripts[key]['process'].pid}).\n"
-                                 f"You can stop it any time from 📁 My Files.", reply_markup=kb, parse_mode="HTML")
+                                 f"You can stop it any time from 🗂 Old Files.", reply_markup=kb, parse_mode="HTML")
             warn = customers.pop_error(user_id)
             if warn:
                 await callback.message.answer(warn)
         else:
-            await note.edit_text(f"❌ Could not start <code>{html.escape(file_name)}</code>. Check 📋 View Output in 📁 My Files.",
+            await note.edit_text(f"❌ Could not start <code>{html.escape(file_name)}</code>. Check 📋 View Output in 🗂 Old Files.",
                                  parse_mode="HTML")
     staged.pop(user_id, None)
 
@@ -1381,7 +1434,7 @@ async def handle_document(message: types.Message):
                  InlineKeyboardButton(text="⭐ Add Favorite", callback_data=f"toggle_fav:{file_name}")],
                 [InlineKeyboardButton(text="ℹ️ File Info", callback_data=f"file_info:{file_name}"),
                  InlineKeyboardButton(text="🗑️ Delete", callback_data=f"delete_file:{file_name}")],
-                [InlineKeyboardButton(text="📁 My Files", callback_data="check_files"),
+                [InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files"),
                  InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")]
             ])
         else:
@@ -1390,7 +1443,7 @@ async def handle_document(message: types.Message):
                  InlineKeyboardButton(text="⭐ Add Favorite", callback_data=f"toggle_fav:{file_name}")],
                 [InlineKeyboardButton(text="ℹ️ File Info", callback_data=f"file_info:{file_name}"),
                  InlineKeyboardButton(text="🗑️ Delete", callback_data=f"delete_file:{file_name}")],
-                [InlineKeyboardButton(text="📁 My Files", callback_data="check_files"),
+                [InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files"),
                  InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")]
             ])
         
@@ -1613,7 +1666,7 @@ async def callback_run_script(callback: types.CallbackQuery):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🛑 Stop Script", callback_data=f"stop_script:{script_key}")],
             [InlineKeyboardButton(text="📋 View Output", callback_data=f"view_log:{file_name}")],
-            [InlineKeyboardButton(text="📁 My Files", callback_data="check_files"),
+            [InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files"),
              InlineKeyboardButton(text="🏠 Home", callback_data="back_to_main")]
         ])
         await callback.message.answer(
@@ -1667,7 +1720,7 @@ async def callback_view_log(callback: types.CallbackQuery):
 
         back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔄 Refresh", callback_data=f"view_log:{file_name}")],
-            [InlineKeyboardButton(text="📁 My Files", callback_data="check_files")]
+            [InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files")]
         ])
         await callback.message.answer(text, reply_markup=back_keyboard, parse_mode="HTML")
         await callback.answer()
@@ -1826,7 +1879,7 @@ Please wait...
 """
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📁 My Files", callback_data="check_files"),
+            [InlineKeyboardButton(text="🗂 Old Files", callback_data="check_files"),
              InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")]
         ])
         
@@ -2675,29 +2728,24 @@ async def cmd_help(message: types.Message):
 
 <b>🎯 HOW TO USE:</b>
 
-1️⃣ <b>Upload Files:</b>
-   • Click 'Upload File'
-   • Send your .py, .js, or .zip file
-   • File will be saved automatically
+1️⃣ <b>Add a Bot:</b>
+   • Tap ➕ Add Bot (or /addbot)
+   • Send your bot token from @BotFather
 
-2️⃣ <b>Run Scripts:</b>
-   • Go to 'My Files'
-   • Click 'Run' on any file
-   • Monitor script execution
+2️⃣ <b>Upload Files:</b>
+   • Tap 🤖 My Bots → pick your bot
+   • Tap 📤 Upload/replace file
 
-3️⃣ <b>Manage Files:</b>
-   • View all files in 'My Files'
-   • Add to favorites with ⭐
-   • Delete unwanted files
-
-4️⃣ <b>Search:</b>
-   • Use /search [filename]
-   • Quick file lookup
+3️⃣ <b>Run:</b>
+   • Tap ▶️ Start, then 📋 Logs to watch it
+   • 💾 Backup and ⚙️ Environment are there too
 
 ━━━━━━━━━━━━━━━━━━━━
 <b>💡 COMMANDS:</b>
 
 /start - Start the bot
+/addbot - Add a bot (token first)
+/mybots - Manage your bots
 /help - Show this help
 /search - Search files
 /stats - Your statistics
@@ -3255,7 +3303,7 @@ async def _auto_run_after_upload(message, user_id, file_name):
         if warn:
             await message.answer(warn)
     else:
-        await note.edit_text(f"❌ Could not start <code>{html.escape(file_name)}</code>. Use ▶️ Run in 📁 My Files "
+        await note.edit_text(f"❌ Could not start <code>{html.escape(file_name)}</code>. Use ▶️ Run in 🗂 Old Files "
                              f"and check 📋 View Output.", parse_mode="HTML")
 
 async def _handle_special_upload(message, document, kind):
@@ -3756,6 +3804,20 @@ async def main():
     except Exception as e:
         logger.error(f"Fleet recovery failed: {e}", exc_info=True)
     
+    try:
+        await bot.set_my_commands([
+            types.BotCommand(command="start", description="Main menu"),
+            types.BotCommand(command="addbot", description="Add a bot (send token first)"),
+            types.BotCommand(command="mybots", description="Manage your bots"),
+            types.BotCommand(command="term", description="Terminal"),
+            types.BotCommand(command="backup", description="Download backup"),
+            types.BotCommand(command="mydb", description="My database"),
+            types.BotCommand(command="cancel", description="Cancel current action"),
+            types.BotCommand(command="help", description="Help"),
+        ])
+    except Exception as e:
+        logger.warning(f"set_my_commands failed: {e}")
+
     background = [
         asyncio.create_task(web_server()),
         asyncio.create_task(keep_alive()),

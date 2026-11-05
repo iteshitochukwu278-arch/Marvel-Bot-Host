@@ -329,6 +329,8 @@ def get_main_keyboard(user_id):
         *_updates_row(),
         [InlineKeyboardButton(text="➕ Add Bot", callback_data="fleet_add"),
          InlineKeyboardButton(text="🤖 My Bots", callback_data="fleet_list")],
+        [InlineKeyboardButton(text="📜 Commands", callback_data="show_commands"),
+         InlineKeyboardButton(text="ℹ️ Help", callback_data="show_help")],
         [InlineKeyboardButton(text="💾 My Backup", callback_data="my_backup"),
          InlineKeyboardButton(text="🗄️ My Database", callback_data="my_database")],
         [InlineKeyboardButton(text="🖥️ Terminal", callback_data="terminal_help"),
@@ -343,58 +345,48 @@ def get_main_keyboard(user_id):
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def get_admin_panel_keyboard():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⏱️ Bot Uptime", callback_data="admin_bot_uptime")],
-        [InlineKeyboardButton(text="👥 Total Users", callback_data="admin_total_users_simple")],
-        [InlineKeyboardButton(text="📝 Logs", callback_data="admin_view_logs")],
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🤖 Fleet Bots", callback_data="admin_fleet_list"),
+         InlineKeyboardButton(text="🗄️ DB Servers", callback_data="admin_dbstats")],
+        [InlineKeyboardButton(text="👥 Total Users", callback_data="admin_total_users_simple"),
+         InlineKeyboardButton(text="⏱️ Bot Uptime", callback_data="admin_bot_uptime")],
+        [InlineKeyboardButton(text="📝 Logs", callback_data="admin_view_logs"),
+         InlineKeyboardButton(text="📖 Admin Commands", callback_data="admin_cmds_help")],
         [InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")]
     ])
-    return keyboard
 
 COMMANDS_TEXT = """<b>📜 ALL COMMANDS</b>
-/start - Main menu
-/addbot (or /newbot) - Add a bot (send its token first)
-/mybots - Your bots: files, start/stop, logs, backup
-/botenv BOT_ID KEY value - Set a secret
-/botenvdel BOT_ID KEY - Remove a secret
-/botversions BOT_ID file - File versions
-/botrestore BOT_ID file N - Restore a version
-/term COMMAND - Terminal (pip, ls, python...)
-/backup - Download your backup
-/mydb - Your database info
-/search NAME - Search files
-/stats - Your stats
-/cancel - Cancel what you are doing
-/help - Help"""
 
-ADMIN_COMMANDS_TEXT = """
+/start — Main menu
+/addbot — Add a bot (token first)
+/mybots — Manage your bots
+/botenv — Set a secret
+/botenvdel — Remove a secret
+/botversions — File versions
+/botrestore — Restore a version
+/term — Terminal
+/backup — Download backup
+/mydb — Database info
+/stats — Your stats
+/cancel — Cancel current action
+/help — Help"""
 
-<b>👑 ADMIN COMMANDS</b>
-/fleetadmin - List all bots
-/fleetadmin stop|disable|enable BOT_ID
-/fleetadmin suspend|activate USER_ID
-/fleetadmin limit USER_ID COUNT
-/fleetadmin plan USER_ID COUNT DAYS
-/dbstats - Customers per database server
-/addadmin /removeadmin - Manage admins
-/addpremium - Add premium
-/ban /unban - Ban or unban a user
-/broadcast - Message all users"""
+FOOTER = "\n\n💎 <i>Developed by Marvel</i> 🚀"
 
 def build_welcome_text(user_id: int, full_name: str) -> str:
-    updates_line = f"\n📢 <b>Updates:</b> {_updates_url()}\n" if _updates_url() else "\n"
-    return f"""🚀 <b>HOSTING BOT</b> — by Marvel
+    updates_line = f"\n📢 <b>Updates:</b> {_updates_url()}" if _updates_url() else ""
+    return f"""🚀 <b>MARVEL BOT HOSTING</b>
+━━━━━━━━━━━━━━━━━━
 
-👋 <b>Welcome, {full_name}!</b>
-🆔 <b>Your ID:</b> <code>{user_id}</code>
+👋 Welcome, <b>{full_name}</b>!
+🆔 Your ID: <code>{user_id}</code>
 
-<b>🔥 HOW IT WORKS</b>
-1️⃣ Tap ➕ <b>Add Bot</b> (or /addbot) and send your bot token from @BotFather
-2️⃣ Tap 🤖 <b>My Bots</b> (or /mybots) → pick the bot → 📤 upload its files
-3️⃣ Tap ▶️ <b>Start</b>. Use 📋 Logs, 💾 Backup, ⚙️ Environment anytime
+<b>⚡ Get started in 3 steps</b>
+1️⃣ Tap ➕ <b>Add Bot</b> and send your bot token
+2️⃣ Open 🤖 <b>My Bots</b> and upload your files
+3️⃣ Tap ▶️ <b>Start</b> — your bot is live
 
-{COMMANDS_TEXT}{ADMIN_COMMANDS_TEXT if user_id in admin_ids else ""}
-{updates_line}"""
+Need all commands? Tap 📜 <b>Commands</b> below 👇{updates_line}{FOOTER}"""
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -435,23 +427,106 @@ async def cmd_start(message: types.Message):
     welcome_text = build_welcome_text(user_id, message.from_user.full_name)
     await message.answer(welcome_text, reply_markup=get_main_keyboard(user_id), parse_mode="HTML")
 
+@dp.callback_query(F.data == "show_commands")
+async def callback_show_commands(callback: types.CallbackQuery):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🤖 My Bots", callback_data="fleet_list"),
+         InlineKeyboardButton(text="➕ Add Bot", callback_data="fleet_add")],
+        [InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")]])
+    await callback.message.edit_text(COMMANDS_TEXT + FOOTER, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+@dp.callback_query(F.data == "show_help")
+async def callback_show_help(callback: types.CallbackQuery):
+    await cmd_help(callback.message)
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_cmds_help")
+async def callback_admin_cmds_help(callback: types.CallbackQuery):
+    if callback.from_user.id not in admin_ids:
+        await callback.answer("❌ Admin access required!", show_alert=True); return
+    text = """📖 <b>ADMIN COMMANDS</b>
+━━━━━━━━━━━━━━━━━━
+
+These need a value, so they are typed:
+
+<code>/fleetadmin plan USER_ID COUNT DAYS</code>
+<code>/fleetadmin limit USER_ID COUNT</code>
+<code>/fleetadmin suspend USER_ID</code>
+<code>/fleetadmin activate USER_ID</code>
+<code>/addadmin USER_ID</code>
+<code>/removeadmin USER_ID</code>
+<code>/addpremium USER_ID</code>
+<code>/ban USER_ID</code>
+<code>/unban USER_ID</code>
+<code>/broadcast MESSAGE</code>
+
+Bot start/stop/disable and DB servers are buttons in the panel 👇""" + FOOTER
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Admin Panel", callback_data="admin_panel")]])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_dbstats")
+async def callback_admin_dbstats(callback: types.CallbackQuery):
+    if callback.from_user.id not in admin_ids:
+        await callback.answer("❌ Admin access required!", show_alert=True); return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Admin Panel", callback_data="admin_panel")]])
+    await callback.message.edit_text("🗄️ <b>Customer database servers</b>\n\n" + _usage_text() + FOOTER, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_fleet_list")
+async def callback_admin_fleet_list(callback: types.CallbackQuery):
+    if callback.from_user.id not in admin_ids:
+        await callback.answer("❌ Admin access required!", show_alert=True); return
+    with fleet._conn() as c:
+        rows = c.execute('SELECT id,owner_id,name,username,status,disabled FROM hosted_bots ORDER BY created_at DESC LIMIT 40').fetchall()
+    btns = [[InlineKeyboardButton(text=f"{'🚫' if r['disabled'] else '🤖'} @{r['username']} · {r['status']}", callback_data=f"admin_fbot:{r['id']}")] for r in rows]
+    btns.append([InlineKeyboardButton(text="🔙 Admin Panel", callback_data="admin_panel")])
+    await callback.message.edit_text("🤖 <b>FLEET BOTS</b>\n━━━━━━━━━━━━━━━━━━\n\n" + (f"{len(rows)} bot(s). Tap one to manage it 👇" if rows else "No hosted bots yet.") + FOOTER,
+                                     reply_markup=InlineKeyboardMarkup(inline_keyboard=btns), parse_mode="HTML")
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("admin_fbot:"))
+async def callback_admin_fbot(callback: types.CallbackQuery):
+    if callback.from_user.id not in admin_ids:
+        await callback.answer("❌ Admin access required!", show_alert=True); return
+    bid = callback.data.split(":", 1)[1]
+    try: b = fleet.get_bot(callback.from_user.id, bid, admin=True)
+    except FleetError as e: await callback.answer(str(e), show_alert=True); return
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⏹ Stop", callback_data=f"admin_fact:stop:{bid}"),
+         InlineKeyboardButton(text="🚫 Disable", callback_data=f"admin_fact:disable:{bid}"),
+         InlineKeyboardButton(text="✅ Enable", callback_data=f"admin_fact:enable:{bid}")],
+        [InlineKeyboardButton(text="🔙 Fleet Bots", callback_data="admin_fleet_list")]])
+    await callback.message.edit_text(f"🤖 <b>{html.escape(b['name'])}</b> (@{html.escape(b['username'])})\n\n🆔 Bot ID: <code>{bid}</code>\n👤 Owner: <code>{b['owner_id']}</code>\n📶 Status: {b['status']}\n🚫 Disabled: {'yes' if b['disabled'] else 'no'}" + FOOTER,
+                                     reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("admin_fact:"))
+async def callback_admin_fact(callback: types.CallbackQuery):
+    if callback.from_user.id not in admin_ids:
+        await callback.answer("❌ Admin access required!", show_alert=True); return
+    _, action, bid = callback.data.split(":", 2)
+    try:
+        b = fleet.get_bot(callback.from_user.id, bid, admin=True)
+        if action == "stop": fleet.stop(int(b['owner_id']), bid, admin=True)
+        elif action == "disable": fleet.set_disabled(bid, True)
+        else: fleet.set_disabled(bid, False)
+        await callback.answer(f"✅ Done: {action}", show_alert=True)
+    except FleetError as e: await callback.answer(str(e), show_alert=True)
+
 @dp.callback_query(F.data == "back_to_main")
 async def callback_back_to_main(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     
-    welcome_text = f"""
-╔═══════════════════════╗
-    🏠 <b>MAIN MENU</b> 🏠
-╚═══════════════════════╝
+    welcome_text = f"""🏠 <b>MAIN MENU</b>
+━━━━━━━━━━━━━━━━━━
 
-👤 <b>User:</b> {callback.from_user.full_name}
-🆔 <b>ID:</b> <code>{user_id}</code>
-🤖 <b>Bots:</b> {len(fleet.list_bots(user_id))}
+👤 {callback.from_user.full_name}
+🆔 <code>{user_id}</code>
+🤖 Bots: <b>{len(fleet.list_bots(user_id))}</b>
 
-➕ Add Bot → send token first, then 🤖 My Bots → upload files → ▶️ Start
-
-{COMMANDS_TEXT}
-"""
+Pick an option below 👇{FOOTER}"""
     await callback.message.edit_text(welcome_text, reply_markup=get_main_keyboard(user_id), parse_mode="HTML")
     await callback.answer()
 
@@ -822,13 +897,7 @@ async def callback_admin_panel(callback: types.CallbackQuery):
         await callback.answer("❌ Admin access required!", show_alert=True)
         return
     
-    text = """
-╔═══════════════════════╗
-    👑 <b>ADMIN PANEL</b> 👑
-╚═══════════════════════╝
-
-Select an option below 👇
-"""
+    text = "👑 <b>ADMIN PANEL</b>\n━━━━━━━━━━━━━━━━━━\n\nSelect an option below 👇" + FOOTER
     
     await callback.message.edit_text(text, reply_markup=get_admin_panel_keyboard(), parse_mode="HTML")
     await callback.answer()
@@ -1014,7 +1083,7 @@ async def cmd_fleetadmin(message: types.Message):
         try:
             uid=int(args[2])
             fleet.set_account(uid, suspended=(args[1]=='suspend'))
-            await message.answer(f"Customer {uid}: {args[1]}. Developed by Marvel")
+            await message.answer(f"Customer {uid}: {args[1]}\n\n💎 Developed by Marvel 🚀")
         except (ValueError, FleetError) as e:
             await message.answer(f"Invalid customer ID: {html.escape(str(e))}")
         return
@@ -1022,14 +1091,14 @@ async def cmd_fleetadmin(message: types.Message):
         try:
             uid, limit, days=int(args[2]),int(args[3]),int(args[4])
             expires=fleet.set_plan(uid,'custom',limit,days)
-            await message.answer(f"Customer {uid}: custom plan, {limit} bots, expires {datetime.fromtimestamp(expires).strftime('%Y-%m-%d')}. Developed by Marvel")
+            await message.answer(f"Customer {uid}: custom plan, {limit} bots, expires {datetime.fromtimestamp(expires).strftime('%Y-%m-%d')}\n\n💎 Developed by Marvel 🚀")
         except (ValueError,FleetError) as e: await message.answer(f"Invalid plan: {html.escape(str(e))}")
         return
     if len(args)==4 and args[1]=='limit':
         try:
             uid, limit=int(args[2]), int(args[3])
             fleet.set_account(uid, bot_limit=limit)
-            await message.answer(f"Customer {uid} bot limit set to {limit}. Developed by Marvel")
+            await message.answer(f"Customer {uid} bot limit set to {limit}\n\n💎 Developed by Marvel 🚀")
         except (ValueError, FleetError) as e:
             await message.answer(f"Invalid limit: {html.escape(str(e))}")
         return
@@ -1041,7 +1110,7 @@ async def cmd_fleetadmin(message: types.Message):
         if action=='stop': fleet.stop(int(b['owner_id']),bid,admin=True)
         elif action=='disable': fleet.set_disabled(bid,True)
         else: fleet.set_disabled(bid,False)
-        await message.answer(f"Done: {action} {bid}. Developed by Marvel")
+        await message.answer(f"Done: {action} {bid}\n\n💎 Developed by Marvel 🚀")
     except FleetError as e: await message.answer(str(e))
 
 @dp.message(Command("mybots"))
@@ -1058,23 +1127,23 @@ async def cmd_addbot(message: types.Message):
         await message.answer(f"Bot limit reached ({fleet.owner_limit(uid)}).")
         return
     pending_fleet_token[uid] = True
-    await message.answer("Send your Telegram bot token from @BotFather. I will verify it with Telegram before accepting files.")
+    await message.answer("➕ <b>ADD A BOT</b>\n━━━━━━━━━━━━━━━━━━\n\n1️⃣ Open @BotFather and copy your bot token\n2️⃣ Paste it here\n\nI will verify it before accepting files.\nSend /cancel to stop." + FOOTER, parse_mode="HTML")
 
 async def _send_fleet_list(message, uid):
     bots = fleet.list_bots(uid)
     rows = [[InlineKeyboardButton(text=f"🤖 {b['name']} (@{b['username']}) — {b['status']}", callback_data=f"fleet_manage:{b['id']}")] for b in bots]
     rows.append([InlineKeyboardButton(text="➕ Add bot", callback_data="fleet_add")])
-    text = "<b>My hosted bots</b>\n" + ("\n".join(f"• {html.escape(b['name'])} (@{html.escape(b['username'])}) — {b['status']}" for b in bots) if bots else "No bots yet. Tap ➕ Add bot and send your bot token first.")
+    text = "🤖 <b>MY BOTS</b>\n━━━━━━━━━━━━━━━━━━\n\n" + ("\n".join(f"• {html.escape(b['name'])} (@{html.escape(b['username'])}) — {b['status']}" for b in bots) if bots else "No bots yet. Tap ➕ Add bot and send your bot token first.")
     legacy = len(user_files.get(uid, []))
     if legacy:
         text += f"\n\n🗂 You also have <b>{legacy}</b> old-style file(s). Tap below to run/manage them. To move one to the new system: ➕ Add bot, then upload that file into the bot."
         rows.append([InlineKeyboardButton(text=f"🗂 Old files ({legacy})", callback_data="check_files")])
-    await message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
+    await message.answer(text + FOOTER, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
 
 @dp.callback_query(F.data == "fleet_add")
 async def fleet_add_callback(callback: types.CallbackQuery):
     pending_fleet_token[callback.from_user.id] = True
-    await callback.message.answer("Send your Telegram bot token from @BotFather for verification.")
+    await callback.message.answer("➕ <b>ADD A BOT</b>\n━━━━━━━━━━━━━━━━━━\n\n1️⃣ Open @BotFather and copy your bot token\n2️⃣ Paste it here\n\nI will verify it before accepting files.\nSend /cancel to stop." + FOOTER, parse_mode="HTML")
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("fleet_manage:"))
@@ -1088,7 +1157,7 @@ async def fleet_manage_callback(callback: types.CallbackQuery):
             [InlineKeyboardButton(text="📋 Logs", callback_data=f"fleet_logs:{bid}"), InlineKeyboardButton(text="💾 Backup", callback_data=f"fleet_backup:{bid}")],
             [InlineKeyboardButton(text="⚙️ Environment", callback_data=f"fleet_env:{bid}"), InlineKeyboardButton(text="📊 Usage", callback_data=f"fleet_usage:{bid}")],
             [InlineKeyboardButton(text="🔙 My bots", callback_data="fleet_list")]]
-    await callback.message.answer(f"<b>{html.escape(b['name'])}</b> (@{html.escape(b['username'])})\nStatus: {b['status']}\nFiles: {', '.join(html.escape(x) for x in files) or 'none'}", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
+    await callback.message.answer(f"🤖 <b>{html.escape(b['name'])}</b> (@{html.escape(b['username'])})\n━━━━━━━━━━━━━━━━━━\n\n📶 Status: <b>{b['status']}</b>\n📂 Files: {', '.join(html.escape(x) for x in files) or 'none yet — tap 📤 Upload'}" + FOOTER, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("fleet_files:"))
@@ -1116,7 +1185,7 @@ async def fleet_backup_callback(callback: types.CallbackQuery):
     bid=callback.data.split(":",1)[1]
     try:
         path=await asyncio.to_thread(fleet.create_backup,callback.from_user.id,bid)
-        await callback.message.answer_document(FSInputFile(path),caption="Bot backup · Developed by Marvel")
+        await callback.message.answer_document(FSInputFile(path),caption="Bot backup\n\n💎 Developed by Marvel 🚀")
         await callback.answer("Backup created")
     except (FleetError, OSError) as e: await callback.answer(str(e),show_alert=True)
 
@@ -1133,7 +1202,7 @@ async def fleet_usage_callback(callback: types.CallbackQuery):
     bid=callback.data.split(":",1)[1]
     try: u=fleet.resource_usage(callback.from_user.id,bid)
     except FleetError as e: await callback.answer(str(e),show_alert=True); return
-    await callback.message.answer(f"<b>Resource usage</b>\nStatus: {u['status']}\nPID: {u['pid'] or '—'}\nCPU: {u['cpu_percent']:.1f}%\nRAM: {u['memory_mb']:.1f} MB\nDeveloped by Marvel",parse_mode="HTML")
+    await callback.message.answer(f"<b>Resource usage</b>\nStatus: {u['status']}\nPID: {u['pid'] or '—'}\nCPU: {u['cpu_percent']:.1f}%\nRAM: {u['memory_mb']:.1f} MB\n\n💎 Developed by Marvel 🚀",parse_mode="HTML")
     await callback.answer()
 
 @dp.message(Command("botenv"))
@@ -1143,7 +1212,7 @@ async def cmd_botenv(message: types.Message):
         await message.answer("Usage: /botenv BOT_ID KEY value"); return
     try:
         fleet.set_environment(message.from_user.id,args[1],args[2].split(maxsplit=1)[0],args[2].split(maxsplit=1)[1] if len(args[2].split(maxsplit=1))>1 else "")
-        await message.answer("Environment variable saved (value encrypted). Running bot restarted if needed. Developed by Marvel")
+        await message.answer("Environment variable saved (value encrypted). Running bot restarted if needed\n\n💎 Developed by Marvel 🚀")
     except (FleetError,IndexError) as e: await message.answer(html.escape(str(e)))
 
 @dp.message(Command("botenvdel"))
@@ -1185,7 +1254,7 @@ async def _pick_bot(callback, action, verb):
     bots = fleet.list_bots(uid)
     if not bots:
         pending_fleet_token[uid] = True
-        await callback.message.answer("You have no bots yet. Send your Telegram bot token from @BotFather first. I will verify it, then you can upload files.")
+        await callback.message.answer("➕ <b>NO BOTS YET</b>\n━━━━━━━━━━━━━━━━━━\n\nPaste your bot token from @BotFather first. I will verify it, then you can upload files.\nSend /cancel to stop." + FOOTER, parse_mode="HTML")
         await callback.answer(); return
     if len(bots) == 1:
         callback.data = f"{action}:{bots[0]['id']}"
@@ -1249,7 +1318,7 @@ async def handle_file_name_text(message: types.Message):
             verified = await fleet.verify_token(token)
             record = fleet.add_verified(user_id, token, verified)
             pending_fleet_token.pop(user_id, None)
-            await message.answer(f"✅ Verified @{html.escape(record['username'])} ({html.escape(record['name'])}). Now open /mybots and upload its files.\nDeveloped by Marvel", parse_mode="HTML")
+            await message.answer(f"✅ Verified @{html.escape(record['username'])} ({html.escape(record['name'])}). Now open /mybots and upload its files\n\n💎 Developed by Marvel 🚀", parse_mode="HTML")
         except FleetError as e:
             await message.answer(f"❌ {html.escape(str(e))} Send a valid token or /cancel.", parse_mode="HTML")
         return
@@ -1327,7 +1396,7 @@ async def handle_document(message: types.Message):
             stream = await bot.download_file(file.file_path)
             data = stream.read() if hasattr(stream, 'read') else bytes(stream)
             fleet.save_file(user_id, bid, file_name, data)
-            await message.answer(f"✅ Saved <code>{html.escape(file_name)}</code> to this bot only. Restart it from /mybots to apply changes.\nDeveloped by Marvel", parse_mode="HTML")
+            await message.answer(f"✅ Saved <code>{html.escape(file_name)}</code> to this bot only. Restart it from /mybots to apply changes\n\n💎 Developed by Marvel 🚀", parse_mode="HTML")
         except FleetError as e:
             await message.answer(f"❌ {html.escape(str(e))}", parse_mode="HTML")
         return
@@ -2721,39 +2790,25 @@ async def cmd_search_files(message: types.Message):
 
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
-    text = """
-╔═══════════════════════╗
-    ℹ️ <b>HELP & INFO</b> ℹ️
-╚═══════════════════════╝
+    text = """ℹ️ <b>HELP</b>
+━━━━━━━━━━━━━━━━━━
 
-<b>🎯 HOW TO USE:</b>
+<b>1️⃣ Add your bot</b>
+Tap ➕ <b>Add Bot</b> (or /addbot) and send the token from @BotFather.
 
-1️⃣ <b>Add a Bot:</b>
-   • Tap ➕ Add Bot (or /addbot)
-   • Send your bot token from @BotFather
+<b>2️⃣ Upload files</b>
+Tap 🤖 <b>My Bots</b> → choose your bot → 📤 <b>Upload/replace file</b>.
 
-2️⃣ <b>Upload Files:</b>
-   • Tap 🤖 My Bots → pick your bot
-   • Tap 📤 Upload/replace file
+<b>3️⃣ Run it</b>
+Tap ▶️ <b>Start</b>. Use 📋 <b>Logs</b> to watch it and 💾 <b>Backup</b> to save it.
 
-3️⃣ <b>Run:</b>
-   • Tap ▶️ Start, then 📋 Logs to watch it
-   • 💾 Backup and ⚙️ Environment are there too
+<b>Secrets / settings</b>
+⚙️ <b>Environment</b> inside your bot.
 
-━━━━━━━━━━━━━━━━━━━━
-<b>💡 COMMANDS:</b>
+Need all commands? Tap 📜 <b>Commands</b> in the main menu.
 
-/start - Start the bot
-/addbot - Add a bot (token first)
-/mybots - Manage your bots
-/help - Show this help
-/search - Search files
-/stats - Your statistics
-/premium - Free info
+💬 Need help? Tap <b>Contact Support</b> in the main menu.""" + FOOTER
 
-<b>Need help? Contact owner! 💬</b>
-"""
-    
     back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎯 Features", callback_data="all_features")],
         [InlineKeyboardButton(text="🏠 Main Menu", callback_data="back_to_main")]
@@ -3757,7 +3812,7 @@ async def fleet_alert_loop():
                 try:
                     await bot.send_message(int(item['owner_id']),
                         f"⚠️ Your hosted bot <b>{html.escape(item['name'])}</b> repeatedly crashed and was paused.\n"
-                        f"Open /mybots → Logs to inspect the error, then fix the file and restart it.\nDeveloped by Marvel",parse_mode="HTML")
+                        f"Open /mybots → Logs to inspect the error, then fix the file and restart it\n\n💎 Developed by Marvel 🚀",parse_mode="HTML")
                 except Exception as e: logger.warning("Could not deliver fleet crash alert: %s",e)
         except Exception as e: logger.warning("Fleet alert monitor failed: %s",e)
         await asyncio.sleep(45)
